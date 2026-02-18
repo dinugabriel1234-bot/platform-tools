@@ -28,7 +28,6 @@ jobs:
 
       - name: Download Android NDK r26 (Linux x86_64)
         run: |
-          # Pick the exact r26 zip you want. r26b is a common stable choice.
           NDK_ZIP=android-ndk-r26b-linux.zip
           wget -q "https://dl.google.com/android/repository/${NDK_ZIP}"
           unzip -q "${NDK_ZIP}" -d "$HOME"
@@ -41,16 +40,16 @@ jobs:
 
       - name: Apply patches
         run: |
-          # Apply all patches in order
           for p in patches/*.patch; do
             echo "Applying $p"
             git apply "$p"
           done
 
-      # EXACT ca în tutorial: symlink googletest -> third_party/googletest înainte de cmake
+      # EXACT ca în tutorial + fix minimal: creează third_party înainte de symlink
       - name: Build host protoc (protobuf compiler)
         run: |
           cd src/protobuf
+          mkdir -p third_party
           ln -sf "$(realpath ../googletest)" third_party/googletest
           cmake -GNinja
           ninja -j"$(nproc)"
