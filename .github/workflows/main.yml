@@ -1,0 +1,75 @@
+name: build-android-tools
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "AOSP platform-tools tag to fetch (used by get_source.py)"
+        required: true
+        default: "platform-tools-34.0.0"
+      api:
+        description: "Android API level"
+        required: true
+        default: "30"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3 python3-pip git golang build-essential cmake ninja-build \
+            bison flex wget unzip zip tar
+
+      - name: Download Android NDK r26 (Linux x86_64)
+        run: |
+          # Pick the exact r26 zip you want. r26b is a common stable choice.
+          NDK_ZIP=android-ndk-r26b-linux.zip
+          wget -q "https://dl.google.com/android/repository/${NDK_ZIP}"
+          unzip -q "${NDK_ZIP}" -d "$HOME"
+          echo "ANDROID_NDK_HOME=$HOME/android-ndk-r26b" >> $GITHUB_ENV
+
+      - name: Fetch AOSP sources
+        run: |
+          python3 -m pip install --upgrade pip requests
+          python3 get_source.py --tag="${{ inputs.tag }}"
+
+      - name: Apply patches
+        run: |
+          # Apply all patches in order
+          for p in patches/*.patch; do
+            echo "Applying $p"
+            git apply "$p"
+          done
+
+      - name: Build host protoc (protobuf compiler)
+        run: |
+          cd src/protobuf
+          cmake -GNinja
+          ninja -j"$(nproc)"
+          echo "PROTOC=$PWD/protoc" >> $GITHUB_ENV
+
+      - name: BoringSSL googletest symlink
+        run: |
+          ln -sf "$(realpath ./src/googletest/googletest)" \
+                 ./src/boringssl/src/third_party/googletest
+
+      - name: Build for arm64-v8a
+        run: |
+          python3 build.py \
+            --ndk="$ANDROID_NDK_HOME" \
+            --api="${{ inputs.api }}" \
+            --abi=arm64-v8a \
+            --protoc="$PROTOC" \
+            --build=build/aarch64
+
+      - name: Upload artifacts (arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-tools-arm64-v8a
+          path: build/aarch64/bin/**
