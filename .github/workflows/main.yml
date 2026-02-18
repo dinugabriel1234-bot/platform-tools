@@ -47,13 +47,16 @@ jobs:
             git apply "$p"
           done
 
+      # EXACT ca în tutorial: symlink googletest -> third_party/googletest înainte de cmake
       - name: Build host protoc (protobuf compiler)
         run: |
           cd src/protobuf
+          ln -sf "$(realpath ../googletest)" third_party/googletest
           cmake -GNinja
           ninja -j"$(nproc)"
           echo "PROTOC=$PWD/protoc" >> $GITHUB_ENV
 
+      # EXACT ca în tutorial: symlink pentru boringssl -> third_party/googletest
       - name: BoringSSL googletest symlink
         run: |
           ln -sf "$(realpath ./src/googletest/googletest)" \
